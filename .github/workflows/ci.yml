@@ -18,4 +18,6 @@ jobs:
           pip install ruff
           ruff check .
       - name: Smoke test model forward pass
+        env:
+          PYTHONPATH: .
         run: python eval/smoke_test.py
