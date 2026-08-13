@@ -1,0 +1,7 @@
+﻿layers: 12
+hidden_dim: 768
+n_heads: 12
+context_len: 2048
+activation: swiglu
+norm: rmsnorm
+positional_embedding: rope
