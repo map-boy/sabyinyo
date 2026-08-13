@@ -1,4 +1,5 @@
 ﻿import torch
+
 from model.architecture import CodeGenModel
 
 m = CodeGenModel(vocab_size=100, dim=32, n_layers=2, n_heads=4, max_seq_len=16)

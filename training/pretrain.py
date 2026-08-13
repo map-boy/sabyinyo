@@ -1,6 +1,6 @@
 ﻿import torch
 import torch.nn.functional as F
-from model.architecture import CodeGenModel
+
 from model.checkpoint_utils import save_checkpoint
 
 

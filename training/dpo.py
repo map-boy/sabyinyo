@@ -1,5 +1,4 @@
-﻿import torch
-import torch.nn.functional as F
+﻿import torch.nn.functional as F
 
 
 def dpo_loss(policy_chosen_logps, policy_rejected_logps,

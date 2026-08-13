@@ -1,5 +1,4 @@
-﻿import torch
-import torch.nn.functional as F
+﻿import torch.nn.functional as F
 
 
 def sft_loss(logits, labels, ignore_index=-100):

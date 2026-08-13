@@ -1,5 +1,6 @@
-﻿import torch.nn as nn
-from model.layers import RMSNorm, SwiGLU, GroupedQueryAttention
+﻿from torch import nn
+
+from model.layers import GroupedQueryAttention, RMSNorm, SwiGLU
 
 
 class TransformerBlock(nn.Module):

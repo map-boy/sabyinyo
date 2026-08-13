@@ -1,0 +1,5 @@
+﻿[tool.ruff]
+extend-exclude = ["notebooks"]
+
+[tool.ruff.lint]
+ignore = ["S102", "BLE001", "PLW1510"]
