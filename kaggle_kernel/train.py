@@ -41,8 +41,15 @@ import torch.nn.functional as F
 from torch import nn
 from torch.utils.data import DataLoader, Dataset
 
-DATA_DIR = "/kaggle/input/datasets/mugishaalainpaisible/codegen-corpus-v1"
-OUT_DIR = "/kaggle/working/checkpoints"
+if os.path.isdir("/content"):
+    DATA_DIR = "/content/data"
+    OUT_DIR = "/content/checkpoints"
+elif os.path.isdir("/kaggle/input"):
+    DATA_DIR = "/kaggle/input/datasets/mugishaalainpaisible/codegen-corpus-v1"
+    OUT_DIR = "/kaggle/working/checkpoints"
+else:
+    DATA_DIR = os.environ.get("SABYINYO_DATA_DIR", "./data")
+    OUT_DIR = os.environ.get("SABYINYO_OUT_DIR", "./checkpoints")
 os.makedirs(OUT_DIR, exist_ok=True)
 
 # --- must match configs/model_config.yaml exactly ---
