@@ -60,8 +60,8 @@ N_HEADS = 12
 SEQ_LEN = 2048
 
 # --- must match configs/train_config.yaml exactly ---
-BATCH_SIZE = 4
-GRAD_ACCUM = 32
+BATCH_SIZE = 2
+GRAD_ACCUM = 64
 LR = 3e-4
 WARMUP_STEPS = 2000
 MAX_STEPS = 100000
