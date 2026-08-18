@@ -1,6 +1,5 @@
 ﻿name: CI
 on: [push, pull_request]
-
 jobs:
   lint-and-validate:
     runs-on: ubuntu-latest
@@ -12,7 +11,7 @@ jobs:
       - name: Install deps
         run: pip install -r requirements.txt
       - name: Validate Python syntax
-        run: python -m py_compile data/scripts/*.py model/*.py training/*.py eval/*.py inference/*.py
+        run: python -m py_compile data/scripts/*.py model/*.py training/*.py eval/*.py inference/*.py kaggle_kernel/*.py
       - name: Lint
         run: |
           pip install ruff
