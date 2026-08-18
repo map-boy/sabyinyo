@@ -50,8 +50,8 @@ Local dev and CI have no GPU. Actual training runs happen in Google Colab:
 2. It clones this repo, installs deps, and logs into Hugging Face Hub
 3. Checkpoints get pushed to the Hugging Face model repo
 
-Model checkpoints: https://huggingface.co/USERNAME/sabyinyo-codegen
-Datasets: https://huggingface.co/datasets/USERNAME/sabyinyo-data
+Model checkpoints: https://huggingface.co/map-boy/sabyinyo-codegen
+Datasets: https://huggingface.co/datasets/map-boy/sabyinyo-data
 
 ## Status
 
