@@ -148,6 +148,23 @@ This repo now has the harness: `eval/harness.py`, `eval/diagnostics.py`,
 
 **Gate:** `python eval/run_eval.py` exits 0.
 
+### G5b - Behaviour
+
+Capability and behaviour are separate axes, and they fail separately: a model
+that writes correct code and cheerfully emits `rm -rf /` is not shippable.
+
+`docs/MODEL_SPEC.md` states the rules with an explicit precedence order, so
+conflicts resolve the same way every time. `inference/policy.py` implements the
+enforceable ones as pure functions either side of generation, and
+`eval/behavior_eval.py` scores compliance rule by rule.
+
+Worth doing early, not late: the deterministic half (destructive-command
+refusal, secret scanning, syntax gating) works regardless of how good the model
+is, and it is far cheaper to build before there are users than after.
+
+**Gate:** `python eval/behavior_eval.py --policy-only` exits 0. It needs no
+checkpoint, so it gates CI from day one.
+
 ### G6 - Serving
 
 Do not build this until G5 passes.
@@ -180,11 +197,11 @@ data/scripts/     scrape, clean, tokenize, split   [split is missing]
 tokenizer/        BPE training + verification
 model/            architecture, layers, checkpoint_utils   [+ kv_cache]
 training/         pretrain, finetune (SFT), dpo, callbacks
-eval/             harness, diagnostics, run_eval, functional evals
-inference/        generate, serve
+eval/             harness, diagnostics, run_eval, behavior_eval, functional evals
+inference/        generate, policy (decision layer), serve
 notebooks/        train_colab, test_model_colab
-docs/             FINDINGS, MVP_ARCHITECTURE
-.github/          CI: lint, syntax, smoke test   [+ eval gate]
+docs/             MODEL_SPEC, FINDINGS, MVP_ARCHITECTURE
+.github/          CI: lint, syntax, smoke test, spec compliance   [+ eval gate]
 ```
 
 Two structural fixes worth doing early:
