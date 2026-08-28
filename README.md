@@ -29,10 +29,10 @@ Two paths are supported, per the project plan:
 - model/      transformer architecture (architecture.py, layers.py, checkpoint_utils.py)
 - training/   pretrain.py, finetune.py (SFT), dpo.py, distributed_setup.py, callbacks.py
 - eval/       evaluation harness + diagnostics, HumanEval-style runner, TypeScript/Bash syntax checks, smoke test
-- inference/  generate.py, serve.py (vLLM endpoint)
+- inference/  generate.py, policy.py (decision layer), serve.py (vLLM endpoint)
 - notebooks/  Colab training and testing notebooks
-- docs/       FINDINGS.md (checkpoint analysis), MVP_ARCHITECTURE.md (build plan)
-- .github/    CI workflow (lint, syntax check, smoke test)
+- docs/       MODEL_SPEC.md (behaviour rules), FINDINGS.md (checkpoint analysis), MVP_ARCHITECTURE.md (build plan)
+- .github/    CI workflow (lint, syntax check, smoke test, spec compliance)
 
 ## Setup
 
@@ -40,7 +40,7 @@ pip install -r requirements.txt
 
 ## CI
 
-Every push runs automatically via GitHub Actions: Python syntax validation, lint (ruff), and a model forward-pass smoke test.
+Every push runs automatically via GitHub Actions: Python syntax validation, lint (ruff), a model forward-pass smoke test, and the spec-compliance suite for the decision layer.
 
 Check status: https://github.com/map-boy/sabyinyo/actions
 
@@ -68,6 +68,23 @@ interactively in Colab, with the secrets wiring and a loss-vs-step curve.
 
 Required Colab secrets: `hug_read`, `KAGGLE_USERNAME`, `KAGGLE_KEY`
 (`HF_TOKEN_WRITE` only for pushing checkpoints).
+
+## Model behaviour
+
+`docs/MODEL_SPEC.md` is the rulebook: what the model answers, refuses, or asks
+about, with the tiers ordered so conflicts resolve the same way every time
+(safety > honesty > correctness > compliance > helpfulness).
+
+`inference/policy.py` implements the enforceable rules as two pure functions -
+`decide(prompt)` before generation, `validate(text, decision)` after - so
+destructive commands, leaked credentials, and unparseable code are caught by
+deterministic code rather than hoped away.
+
+    PYTHONPATH=. python eval/behavior_eval.py --policy-only
+
+scores the decision layer against the spec, rule by rule, with no checkpoint
+required. It runs in CI. Drop `--policy-only` to also generate with a real
+checkpoint and measure how often the output clears the enforced rules.
 
 ## Status
 
