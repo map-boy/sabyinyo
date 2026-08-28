@@ -33,12 +33,18 @@ from eval.harness import (
 # Prompts in the corpus's own format: <filename>/<language> headers, which is
 # what the model actually saw during training.
 PROMPTS = [
-    "<filename>utils/math_helpers.py</filename>\n<language>python</language>\n"
-    "def fibonacci(n):\n",
-    "<filename>src/types.ts</filename>\n<language>typescript</language>\n"
-    "interface User {\n  id: number;\n",
-    "<filename>scripts/backup.sh</filename>\n<language>bash</language>\n"
-    "#!/usr/bin/env bash\nset -euo pipefail\n",
+    (
+        "<filename>utils/math_helpers.py</filename>\n<language>python</language>\n"
+        "def fibonacci(n):\n"
+    ),
+    (
+        "<filename>src/types.ts</filename>\n<language>typescript</language>\n"
+        "interface User {\n  id: number;\n"
+    ),
+    (
+        "<filename>scripts/backup.sh</filename>\n<language>bash</language>\n"
+        "#!/usr/bin/env bash\nset -euo pipefail\n"
+    ),
 ]
 
 
