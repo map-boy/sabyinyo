@@ -28,9 +28,10 @@ Two paths are supported, per the project plan:
 - tokenizer/  BPE tokenizer training
 - model/      transformer architecture (architecture.py, layers.py, checkpoint_utils.py)
 - training/   pretrain.py, finetune.py (SFT), dpo.py, distributed_setup.py, callbacks.py
-- eval/       HumanEval-style runner, TypeScript/Bash syntax checks, smoke test
+- eval/       evaluation harness + diagnostics, HumanEval-style runner, TypeScript/Bash syntax checks, smoke test
 - inference/  generate.py, serve.py (vLLM endpoint)
-- notebooks/  Colab training notebook
+- notebooks/  Colab training and testing notebooks
+- docs/       FINDINGS.md (checkpoint analysis), MVP_ARCHITECTURE.md (build plan)
 - .github/    CI workflow (lint, syntax check, smoke test)
 
 ## Setup
@@ -53,9 +54,27 @@ Local dev and CI have no GPU. Actual training runs happen in Google Colab:
 Model checkpoints: https://huggingface.co/map-boy/sabyinyo-codegen
 Datasets: https://huggingface.co/datasets/map-boy/sabyinyo-data
 
+## Testing a checkpoint
+
+Run the full suite against a checkpoint on the Hub:
+
+    PYTHONPATH=. python eval/run_eval.py --data-dir /content/data --checkpoint latest
+
+It downloads the checkpoint, scores held-out perplexity against three baselines
+(uniform-random, a unigram table, and an untrained model of the same shape),
+runs structural diagnostics, generates samples, and exits non-zero if any check
+fails. `notebooks/test_model_colab.ipynb` walks through the same thing
+interactively in Colab, with the secrets wiring and a loss-vs-step curve.
+
+Required Colab secrets: `hug_read`, `KAGGLE_USERNAME`, `KAGGLE_KEY`
+(`HF_TOKEN_WRITE` only for pushing checkpoints).
+
 ## Status
 
-Scaffold and CI complete. Data collection (Phase 1) is next.
+Scaffold and CI complete. The first pretraining run (100k configured steps,
+checkpoints on the Hub) does not beat a random baseline; `docs/FINDINGS.md` has
+the analysis and the fixes, and `docs/MVP_ARCHITECTURE.md` has the plan for the
+next attempt.
 
 ## License
 
