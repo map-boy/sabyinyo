@@ -19,12 +19,17 @@ retry -> refuse.
 """
 
 import ast
+import hmac
+import logging
 import re
 import subprocess
 import tempfile
 from dataclasses import dataclass, field
 
 from data.scripts.clean import has_secret
+from inference.identity import MODEL_NAME  # the model is named "wandaa"
+
+ASSISTANT_NAME = MODEL_NAME  # re-exported so callers can `from inference.policy import ASSISTANT_NAME`
 
 # ---------------------------------------------------------------------------
 # request kinds and their decoding profiles (spec: "Decoding rules")
@@ -165,6 +170,53 @@ class Validation:
     violations: list[Violation] = field(default_factory=list)
 
 
+# ---------------------------------------------------------------------------
+# Admin session (spec: Tier 0 -- Admin)
+#
+# An authenticated admin bypasses the safety/quality gates. Two hard design
+# rules make this an escape hatch rather than a hole:
+#
+#   1. It is NEVER triggered by prompt text. There is no magic word a user can
+#      type to unlock it -- that would be a prompt-injection bypass anyone could
+#      trip. It is unlocked only by presenting a token that matches the
+#      out-of-band secret in SABYINYO_ADMIN_TOKEN, compared in constant time.
+#   2. It is off by default. With no SABYINYO_ADMIN_TOKEN set in the
+#      environment, admin can never engage, whatever token a caller presents.
+#
+# When engaged it still RUNS every check and logs what would have been blocked
+# (report-only), so an admin session leaves an audit trail instead of a blind
+# spot.
+# ---------------------------------------------------------------------------
+_audit = logging.getLogger("sabyinyo.policy.audit")
+
+
+@dataclass(frozen=True)
+class AdminSession:
+    """Result of admin_session(token). `active` is True only for an
+    authenticated admin; pass it into decide()/validate() to bypass the gates.
+    """
+    active: bool = False
+    label: str = ""
+
+
+def admin_session(token, *, label="admin"):
+    """Return an active AdminSession iff `token` matches SABYINYO_ADMIN_TOKEN.
+
+    Off unless the env secret is set. Constant-time compare so a caller cannot
+    learn the secret by timing. Never reads the prompt.
+    """
+    import os
+
+    secret = os.environ.get("SABYINYO_ADMIN_TOKEN")
+    if not secret or not token:
+        return AdminSession(active=False)
+    if hmac.compare_digest(str(token), secret):
+        _audit.warning("admin session ACTIVATED (label=%s): gates bypassed", label)
+        return AdminSession(active=True, label=label)
+    _audit.warning("admin activation REJECTED (label=%s): bad token", label)
+    return AdminSession(active=False)
+
+
 def _matches(patterns, text):
     """Return (pattern_description) for the first match, else None."""
     for pattern, description in patterns:
@@ -217,11 +269,31 @@ def is_ambiguous(prompt):
     return len(stripped.split()) < 4
 
 
-def decide(prompt):
-    """Pre-generation decision. Pure function of the prompt."""
+def decide(prompt, admin=None):
+    """Pre-generation decision. Pure function of (prompt, admin).
+
+    An active AdminSession bypasses every gate: the request is answered as-is.
+    Admin is authenticated out-of-band (see admin_session); prompt text can
+    never activate it.
+    """
     kind = classify(prompt)
     sampling = SAMPLING[kind]
     language = detect_language(prompt)
+
+    if admin is not None and admin.active:
+        _audit.warning("admin decide() bypass (label=%s): %r", admin.label, prompt[:120])
+        return Decision(ANSWER, kind, sampling, language,
+                        reason="Tier 0: admin session, gates bypassed",
+                        rules=["ADMIN"])
+
+    # I1 -- identity is answered deterministically, never left to the model to
+    # hallucinate. The model is named "wandaa".
+    if re.search(r"\b(your name|who are you|what are you called|what.s your name)\b",
+                 prompt, re.IGNORECASE):
+        from inference.identity import IDENTITY_LINE
+        return Decision(ANSWER, kind, sampling, language,
+                        reason="I1: identity question", rules=["I1"],
+                        message=IDENTITY_LINE)
 
     # Tier 1 first, always.
     malicious = _matches(MALICIOUS, prompt)
@@ -319,8 +391,13 @@ def extract_code(text, language):
     return ""
 
 
-def validate(text, decision, prompt=""):
-    """Post-generation checks. Returns every violation, not just the first."""
+def validate(text, decision, prompt="", admin=None):
+    """Post-generation checks. Returns every violation, not just the first.
+
+    Under an active AdminSession the checks still RUN (so the audit log records
+    what would have been blocked), but the result is reported ok=True: the
+    output is not suppressed.
+    """
     violations = []
 
     # S2 -- secrets. Reuses data/scripts/clean.py so there is one definition.
@@ -370,6 +447,12 @@ def validate(text, decision, prompt=""):
             violations.append(Violation("P3", f"filler opener: {phrase!r}"))
             break
 
+    if admin is not None and admin.active:
+        if violations:
+            _audit.warning("admin validate() bypass (label=%s): would-block %s",
+                           admin.label, [v.rule for v in violations])
+        return Validation(ok=True, violations=violations)
+
     return Validation(ok=not violations, violations=violations)
 
 
@@ -385,15 +468,17 @@ class Response:
     attempts: int = 0
 
 
-def respond(model, tokenizer, prompt, device="cpu", generate_fn=None, max_attempts=2):
+def respond(model, tokenizer, prompt, device="cpu", generate_fn=None, max_attempts=2,
+            admin=None):
     """decide -> generate -> validate -> retry once -> refuse.
 
     `generate_fn` defaults to eval.harness.generate; inject a fake for tests.
+    Pass an active AdminSession (from admin_session) to bypass the gates.
     """
     if generate_fn is None:
         from eval.harness import generate as generate_fn
 
-    decision = decide(prompt)
+    decision = decide(prompt, admin=admin)
     if decision.action in (REFUSE, CLARIFY):
         return Response(decision.action, decision.message, decision)
 
@@ -411,7 +496,7 @@ def respond(model, tokenizer, prompt, device="cpu", generate_fn=None, max_attemp
             seed=attempt,
         )
         text = out["completion"]
-        last = validate(text, decision, prompt)
+        last = validate(text, decision, prompt, admin=admin)
         if last.ok:
             body = f"{decision.message}\n\n{text}" if decision.message else text
             return Response(decision.action, body, decision, last, attempt)
