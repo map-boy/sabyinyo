@@ -100,7 +100,8 @@ def build_model_and_tokenizer(cfg):
         tok.pad_token = tok.eos_token
 
     kwargs = {"trust_remote_code": cfg["trust_remote_code"],
-              "torch_dtype": torch.bfloat16 if cfg["precision"] == "bf16" else torch.float16}
+              "torch_dtype": torch.bfloat16 if cfg["precision"] == "bf16" else torch.float16,
+              "attn_implementation": "eager"}
     if cfg["load_in_4bit"]:
         from transformers import BitsAndBytesConfig
         kwargs["quantization_config"] = BitsAndBytesConfig(
