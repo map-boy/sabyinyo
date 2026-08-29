@@ -1,0 +1,42 @@
+# Path C: LoRA/QLoRA fine-tune of an open code base model.
+# Read by training/finetune.py. Every value here is also saved into each
+# checkpoint (resolved_config.json) so a resume uses the exact same settings.
+
+# --- base model -----------------------------------------------------------
+# Sized to fit Kaggle's smaller GPU (P100 16GB) in 4-bit + LoRA. See the
+# feasibility table in docs/MVP_ARCHITECTURE.md before changing this.
+base_model: "Qwen/Qwen2.5-Coder-1.5B"
+load_in_4bit: true              # QLoRA; set false for LoRA in bf16 on a 16GB card
+trust_remote_code: false
+
+# --- LoRA -----------------------------------------------------------------
+lora_r: 16
+lora_alpha: 32
+lora_dropout: 0.05
+lora_target_modules: ["q_proj", "k_proj", "v_proj", "o_proj",
+                      "gate_proj", "up_proj", "down_proj"]
+
+# --- data -----------------------------------------------------------------
+# JSONL with {"prompt": ..., "response": ...} per line, or a HF dataset id.
+dataset: "data/processed/sft.jsonl"
+max_seq_len: 2048
+prompt_template: "<|user|>\n{prompt}\n<|assistant|>\n{response}"
+
+# --- optimisation ---------------------------------------------------------
+learning_rate: 2.0e-4
+lr_scheduler: cosine
+warmup_ratio: 0.03
+weight_decay: 0.0
+batch_size: 2
+grad_accum: 8                   # effective batch 16
+max_steps: 2000
+grad_clip: 1.0
+seed: 0
+precision: bf16
+
+# --- checkpointing / resume ----------------------------------------------
+hf_repo_id: "map-boy/sabyinyo-codegen"
+save_every_steps: 200           # numbered safety net
+save_every_min: 10              # wall-clock safety net; whichever comes first
+retain_checkpoints: 3           # older numbered checkpoints are pruned
+out_dir: "/kaggle/working/checkpoints"   # launcher overrides per platform

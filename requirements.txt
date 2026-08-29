@@ -1,4 +1,13 @@
-﻿torch>=2.2
+# Legacy Path A (from-scratch pretraining) dependency list, kept for
+# kaggle_kernel/train.py which pip-installs its own pinned torch.
+# For install-anywhere use `pip install -e .` / `.[finetune]` (see pyproject.toml).
+#
+# Kaggle/Colab version note: both platforms preinstall a CUDA-matched torch and
+# a recent transformers. Do NOT `pip install torch` on top of them -- it swaps
+# in a generic wheel and breaks CUDA. These floors (>=) are chosen not to force
+# an upgrade of the platform's transformers/tokenizers; pin only if a run needs a
+# specific version.
+torch>=2.2
 transformers>=4.40
 tokenizers>=0.19
 datasets>=2.18
