@@ -20,3 +20,7 @@ jobs:
         env:
           PYTHONPATH: .
         run: python eval/smoke_test.py
+      - name: Spec compliance (decision layer)
+        env:
+          PYTHONPATH: .
+        run: python eval/behavior_eval.py --policy-only

@@ -25,7 +25,7 @@ def is_valid_python(text):
 
 def is_minified(text):
     lines = text.splitlines() or [""]
-    avg_len = sum(len(l) for l in lines) / len(lines)
+    avg_len = sum(len(line) for line in lines) / len(lines)
     return avg_len > 300
 
 
