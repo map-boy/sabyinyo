@@ -134,6 +134,7 @@ def main():
     cfg = load_config(args.config)
     if args.out_dir:
         cfg["out_dir"] = args.out_dir
+= model(input_ids=batch[\"input_ids\"]," " import torch; print(torch.cuda.get_device_name(0), torch.cuda.get_device_capability(0)); print(torch.__version__, torch.version.cuda)"
     token = hf_token()
     device = "cuda" if torch.cuda.is_available() else "cpu"
     repo_id = cfg["hf_repo_id"]
