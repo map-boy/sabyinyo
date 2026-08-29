@@ -191,15 +191,14 @@ pairs, and preference pairs come from users.
 Mostly what exists, with the gaps named:
 
 ```
-configs/          model / train / tokenizer YAML  (single source of truth -
-                    train.py currently hardcodes copies that have already drifted)
+configs/          model / train / tokenizer / finetune YAML
 data/scripts/     scrape, clean, tokenize, split   [split is missing]
 tokenizer/        BPE training + verification
 model/            architecture, layers, checkpoint_utils   [+ kv_cache]
-training/         pretrain, finetune (SFT), dpo, callbacks
+training/         pretrain, finetune (Path C), checkpointing, launch, dpo
 eval/             harness, diagnostics, run_eval, behavior_eval, functional evals
-inference/        generate, policy (decision layer), serve
-notebooks/        train_colab, test_model_colab
+inference/        generate, policy (decision layer), identity, serve
+notebooks/        train_colab, train_kaggle, test_model_colab
 docs/             MODEL_SPEC, FINDINGS, MVP_ARCHITECTURE
 .github/          CI: lint, syntax, smoke test, spec compliance   [+ eval gate]
 ```
@@ -228,3 +227,66 @@ Two structural fixes worth doing early:
 6. In parallel, start Track B. LoRA on Qwen2.5-Coder-1.5B over your cleaned
    corpus reaches a usable assistant in days, and gives Track A something honest
    to be measured against.
+
+---
+
+## Cross-platform resumable fine-tuning (Path C)
+
+Added: `training/checkpointing.py`, a rewritten `training/finetune.py`,
+`training/launch.py`, `configs/finetune_config.yaml`, and
+`notebooks/train_kaggle.ipynb`. A run can start on Kaggle, be interrupted, and
+resume on Colab with full training state — not just weights.
+
+### What a checkpoint contains
+
+Weights (LoRA adapter), optimizer state, LR scheduler state, global step, epoch,
+and the RNG state of python / numpy / torch / cuda, plus the resolved config.
+The RNG state is the part that makes resume *exact* rather than "reload weights
+and re-shuffle": without it the data order and dropout masks diverge after
+resume. Verified: `capture_rng_state` → `restore_rng_state` round-trips
+identically.
+
+### Cadence and interrupt handling
+
+- Periodic safety net: push every `save_every_steps` (200) **or** `save_every_min`
+  (10) minutes, whichever comes first. Both configurable.
+- Every Hub call is wrapped in exponential backoff (`_with_backoff`): retries
+  429/5xx/connection resets, re-raises 401/403/404 immediately.
+- SIGINT/SIGTERM (Kaggle/Colab preemption arrives as SIGTERM) is caught by
+  `InterruptGuard`; the loop pushes one final checkpoint at the next safe point.
+  A hard SIGKILL can't be caught — the periodic pushes bound loss there.
+- Old numbered checkpoints beyond `retain_checkpoints` (3) are pruned so the Hub
+  repo stays small; `checkpoints/latest.txt` names the newest step so resume is
+  a one-line read, not a repo listing.
+
+### Kaggle GPU feasibility (Path C base model sizing)
+
+Kaggle's free GPUs are **P100 16GB** or **T4 x2 (2×16GB)**, ~30h/week. QLoRA
+(4-bit base + LoRA adapter) memory is roughly `base_params × 0.5 bytes` +
+activations. Practical ceilings on a single 16GB card:
+
+| Base model | QLoRA (4-bit) on P100 16GB | LoRA (bf16) on P100 16GB |
+|---|---|---|
+| Qwen2.5-Coder-1.5B | comfortable (~4–5GB) | fits (~8–10GB) |
+| Qwen2.5-Coder-3B | fits (~7–9GB) | tight, may OOM at 2048 seq |
+| 7B (Qwen/StarCoder2/CodeLlama) | tight but feasible in 4-bit (~11–13GB) | does **not** fit |
+| 13B+ | needs the T4 x2 split or won't fit | no |
+
+The config ships **Qwen2.5-Coder-1.5B + QLoRA** as the safe default: it trains
+with headroom on the smaller P100 and leaves room for a 2048 sequence length.
+7B is the realistic ceiling on one card and only in 4-bit; **these numbers are
+estimates and MUST be confirmed live** (see "what I could not verify").
+
+### Verification plan for resume
+
+1. Start a run; let it checkpoint at least twice (e.g. steps 200, 400).
+2. Kill it mid-interval (SIGKILL to simulate quota death, or Ctrl-C for SIGTERM)
+   at, say, step ~550 — after step 400's push, before 600's.
+3. Restart the launcher. It should log `[resume] continuing from step 400`.
+4. Confirm continuity: the loss at step 401 post-resume is within noise of the
+   loss at step 400 pre-kill (no spike), and the LR at 401 matches the schedule
+   value for 401 (not a re-warmup from 0). A jump in either means optimizer or
+   scheduler state was lost.
+5. Stronger check: run 200 steps straight vs. run 100 + kill + resume 100 with
+   the same seed; the final adapter weights should match to floating-point
+   tolerance. This is what the RNG-state save buys and is the real test.

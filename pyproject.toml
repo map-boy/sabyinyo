@@ -1,8 +1,57 @@
-﻿[tool.ruff]
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sabyinyo"
+version = "0.2.0"
+description = "Code generation model: pretraining, fine-tuning, evaluation, and a behaviour decision layer."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Mugisha Alain Paisible (Gold)", email = "techubwenge@gmail.com" }]
+
+# Deliberately minimal, and deliberately WITHOUT torch.
+# Colab and Kaggle ship a torch build matched to their CUDA driver; letting pip
+# resolve `torch` here would replace it with a generic wheel and break CUDA.
+# Install torch from the platform, then `pip install -e .`.
+dependencies = [
+  "pyyaml>=6.0",
+  "huggingface_hub>=0.23",
+  "tokenizers>=0.19",
+]
+
+[project.optional-dependencies]
+# Path C: fine-tuning an open base model with LoRA/QLoRA.
+finetune = [
+  "transformers>=4.44",
+  "peft>=0.11",
+  "datasets>=2.18",
+  "accelerate>=0.29",
+  "bitsandbytes>=0.43; platform_system == \"Linux\"",
+]
+# Path A: pretraining from scratch (what kaggle_kernel/train.py does).
+pretrain = [
+  "datasets>=2.18",
+  "sentencepiece>=0.2",
+]
+dev = ["ruff>=0.4"]
+
+[project.scripts]
+sabyinyo-train = "training.finetune:main"
+sabyinyo-eval = "eval.run_eval:main"
+
+[project.urls]
+Homepage = "https://github.com/map-boy/sabyinyo"
+
+[tool.setuptools]
+packages = ["model", "training", "eval", "inference", "tokenizer"]
+
+[tool.ruff]
 extend-exclude = ["notebooks"]
 
 [tool.ruff.lint]
-ignore = ["S102", "BLE001", "PLW1510"]
+ignore = ["S102", "S110", "S112", "BLE001", "PLW1510"]
 
 [tool.ruff.lint.per-file-ignores]
 # train.py pip-installs a pinned torch build before importing it, so its

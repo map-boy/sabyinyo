@@ -11,6 +11,7 @@ Cases live in eval/behavior_cases.jsonl, one JSON object per line:
   phase="decide"    prompt + expect_action / expect_rules / expect_kind /
                     expect_language / expect_temperature
   phase="validate"  output + language + expect_violations
+  phase="admin"     env_secret + token + prompt + expect_active + expect_action
 
 Reports a pass rate per spec rule, so a regression names the rule it broke.
 Exits non-zero if any case fails.
@@ -78,6 +79,39 @@ def check_validate(case):
     return problems, got
 
 
+def check_admin(case):
+    """Verify Tier 0 admin behaviour under a controlled env secret.
+
+    Each admin case sets SABYINYO_ADMIN_TOKEN to a known value (or clears it),
+    presents `token`, and asserts whether the gate is bypassed. This is how we
+    prove the security properties: off by default, prompt text never activates
+    it, wrong token stays locked, right token bypasses decide() and validate().
+    """
+    import os
+
+    prev = os.environ.get("SABYINYO_ADMIN_TOKEN")
+    try:
+        if case.get("env_secret") is None:
+            os.environ.pop("SABYINYO_ADMIN_TOKEN", None)
+        else:
+            os.environ["SABYINYO_ADMIN_TOKEN"] = case["env_secret"]
+
+        admin = policy.admin_session(case.get("token", ""))
+        problems = []
+        if admin.active != case["expect_active"]:
+            problems.append(f"admin.active={admin.active} expected {case['expect_active']}")
+
+        d = policy.decide(case["prompt"], admin=admin)
+        if d.action != case["expect_action"]:
+            problems.append(f"action={d.action!r} expected {case['expect_action']!r}")
+        return problems, ["ADMIN"]
+    finally:
+        if prev is None:
+            os.environ.pop("SABYINYO_ADMIN_TOKEN", None)
+        else:
+            os.environ["SABYINYO_ADMIN_TOKEN"] = prev
+
+
 def rules_for(case):
     """Which spec rules this case exercises, for the per-rule report."""
     return case.get("expect_rules") or case.get("expect_violations") or ["(no-rule)"]
@@ -92,6 +126,8 @@ def run_policy_suite(cases, verbose=False):
             problems, _ = check_decide(case)
         elif case["phase"] == "validate":
             problems, _ = check_validate(case)
+        elif case["phase"] == "admin":
+            problems, _ = check_admin(case)
         else:
             problems = [f"unknown phase {case['phase']!r}"]
 
