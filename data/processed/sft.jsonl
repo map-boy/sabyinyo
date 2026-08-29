@@ -1,0 +1,5 @@
+﻿{"prompt": "Write a Python function that returns the factorial of n.", "response": "def factorial(n):\n    if n <= 1:\n        return 1\n    return n * factorial(n - 1)"}
+{"prompt": "Write a Python function that checks if a string is a palindrome.", "response": "def is_palindrome(s):\n    s = s.lower().replace(\" \", \"\")\n    return s == s[::-1]"}
+{"prompt": "Write a Bash one-liner to count the number of lines in a file.", "response": "wc -l < file.txt"}
+{"prompt": "Write a TypeScript function that adds two numbers.", "response": "function add(a: number, b: number): number {\n    return a + b;\n}"}
+{"prompt": "Write a Python function to reverse a list in place.", "response": "def reverse_list(lst):\n    lst.reverse()\n    return lst"}
