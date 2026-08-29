@@ -6,7 +6,7 @@
 # Sized to fit Kaggle's smaller GPU (P100 16GB) in 4-bit + LoRA. See the
 # feasibility table in docs/MVP_ARCHITECTURE.md before changing this.
 base_model: "Qwen/Qwen2.5-Coder-1.5B"
-load_in_4bit: true              # QLoRA; set false for LoRA in bf16 on a 16GB card
+load_in_4bit: false              # QLoRA; set false for LoRA in bf16 on a 16GB card
 trust_remote_code: false
 
 # --- LoRA -----------------------------------------------------------------
