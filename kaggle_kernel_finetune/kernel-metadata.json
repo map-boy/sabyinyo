@@ -1,0 +1,13 @@
+{
+  "id": "mugishaalainpaisible/sabyinyo-finetune-v1",
+  "title": "sabyinyo-finetune-v1",
+  "code_file": "finetune_run.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_internet": true,
+  "dataset_sources": ["mugishaalainpaisible/hf-secret"],
+  "competition_sources": [],
+  "kernel_sources": []
+}

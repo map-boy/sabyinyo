@@ -99,9 +99,21 @@ def build_model_and_tokenizer(cfg):
     if tok.pad_token is None:
         tok.pad_token = tok.eos_token
 
-    kwargs = {"trust_remote_code": cfg["trust_remote_code"],
-              "torch_dtype": torch.bfloat16 if cfg["precision"] == "bf16" else torch.float16,
-              "attn_implementation": "eager"}
+    # attn_implementation deliberately left at the transformers default (NOT
+    # forced to "eager"). This repo's one and only Path C run that produced
+    # real, finite, converging loss (1.19 -> 0.33 -> 0.0001 over 200 steps,
+    # 8/29 ~17:59) used the default. "eager" was added afterward, ~19:08,
+    # while chasing a separate issue -- every run since, on this exact GPU
+    # and dataset, has trained loss=nan from step 0 with eager forced. If a
+    # future run needs eager again for some other reason, that regression
+    # needs to be reproduced and understood first, not silently reintroduced.
+    if cfg["precision"] == "bf16":
+        model_dtype = torch.bfloat16
+    elif cfg["precision"] == "fp32":
+        model_dtype = torch.float32
+    else:
+        model_dtype = torch.float16
+    kwargs = {"trust_remote_code": cfg["trust_remote_code"], "torch_dtype": model_dtype}
     if cfg["load_in_4bit"]:
         from transformers import BitsAndBytesConfig
         kwargs["quantization_config"] = BitsAndBytesConfig(
@@ -142,6 +154,14 @@ def main():
     model, tok = build_model_and_tokenizer(cfg)
     model.to(device)
 
+    # DIAGNOSTIC (temporary): loss=nan reproduces identically in fp16 and
+    # fp32, with a fresh (non-resumed) model, ruling out precision, attn
+    # implementation, and resumed-from-poisoned-checkpoint contamination.
+    # This pinpoints whether the fault is in the loaded weights themselves
+    # or in the label/logit path, before spending a step on it.
+    n_nonfinite = sum((~torch.isfinite(p)).sum().item() for p in model.parameters())
+    print(f"[diag] non-finite values across all parameters: {n_nonfinite}")
+
     ds = build_dataset(cfg, tok)
     loader = DataLoader(ds, batch_size=cfg["batch_size"], shuffle=True,
                         collate_fn=lambda b: collate(b, tok.pad_token_id))
@@ -150,6 +170,12 @@ def main():
         (p for p in model.parameters() if p.requires_grad),
         lr=cfg["learning_rate"], weight_decay=cfg["weight_decay"],
     )
+    # autocast+GradScaler only make sense for fp16 mixed precision. Neither
+    # is the amp/fp16 path itself: `precision: fp32` is a diagnostic fallback
+    # for isolating whether a numerical fault is fp16-specific -- with it,
+    # every op runs at full precision and both are disabled outright.
+    use_amp = cfg["precision"] not in ("bf16", "fp32") and device == "cuda"
+    scaler = torch.amp.GradScaler("cuda", enabled=use_amp)
     total = cfg["max_steps"]
     warmup = int(cfg["warmup_ratio"] * total)
 
@@ -201,15 +227,26 @@ def main():
     while step < total and not done:
         for batch in loader:
             batch = {k: v.to(device) for k, v in batch.items()}
-            import torch; print(torch.cuda.get_device_name(0), torch.cuda.get_device_capability(0)); print(torch.__version__, torch.version.cuda)
 
-            out = model(input_ids=batch["input_ids"],
-                        attention_mask=batch["attention_mask"],
-                        labels=batch["labels"])
-            (out.loss / cfg["grad_accum"]).backward()
+            with torch.autocast(device_type="cuda", dtype=torch.float16, enabled=use_amp):
+                out = model(input_ids=batch["input_ids"],
+                            attention_mask=batch["attention_mask"],
+                            labels=batch["labels"])
+                loss = out.loss / cfg["grad_accum"]
+
+            if step == start_step:
+                n_valid_labels = (batch["labels"] != -100).sum().item()
+                n_zero_attn_rows = (batch["attention_mask"].sum(dim=1) == 0).sum().item()
+                print(f"[diag] first batch: valid (non -100) label count={n_valid_labels}, "
+                      f"rows with all-zero attention_mask={n_zero_attn_rows}, "
+                      f"logits non-finite={(~torch.isfinite(out.logits)).sum().item()}, "
+                      f"logits shape={tuple(out.logits.shape)}")
+            scaler.scale(loss).backward()
             if (step + 1) % cfg["grad_accum"] == 0:
+                scaler.unscale_(optimizer)
                 torch.nn.utils.clip_grad_norm_(model.parameters(), cfg["grad_clip"])
-                optimizer.step()
+                scaler.step(optimizer)
+                scaler.update()
                 scheduler.step()
                 optimizer.zero_grad()
 

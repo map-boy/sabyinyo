@@ -4,3 +4,9 @@ __pycache__/
 *.pyc
 .venv/
 venv/
+
+# Kaggle scratch: run logs, kernel outputs, and the local secret mirror.
+# hf-secret/ holds a live HF write token file (hf_token_write.txt) --
+# it must never be staged by a broad `git add`.
+hf-secret/
+kaggle_output*/

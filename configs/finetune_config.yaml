@@ -32,7 +32,12 @@ grad_accum: 8                   # effective batch 16
 max_steps: 2000
 grad_clip: 1.0
 seed: 0
-precision: fp16
+# DIAGNOSTIC: forced to fp32 to isolate whether loss=nan (seen on every fp16
+# run since Kaggle's P100 host environment changed) is an fp16-numerics
+# problem specific to this torch build, or something structural. Revert to
+# fp16 once that's answered -- fp32 is slower and uses more memory, not the
+# intended steady-state setting.
+precision: fp32
 
 # --- checkpointing / resume ----------------------------------------------
 hf_repo_id: "map-boy/sabyinyo-codegen"
